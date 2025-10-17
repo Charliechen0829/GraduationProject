@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Modal Image/Text Retrieval</title>
+    <style>
+        body { font-family: sans-serif; max-width: 900px; margin: auto; padding: 20px; }
+        .container { display: flex; gap: 20px; margin-bottom: 20px; }
+        .query-box { flex: 1; padding: 15px; border: 1px solid #ccc; border-radius: 8px; }
+        #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 20px;}
+        #results img { width: 100%; height: auto; border-radius: 4px; }
+        #loader { display: none; text-align: center; }
+
+    </style>
+</head>
+<body>
+<h1>Cross-Modal Retrieval</h1>
+
+<div class="container">
+    <div class="query-box">
+        <h2>Query with Text</h2>
+        <input type="text" id="text-input" placeholder="Enter a search query...">
+        <button id="text-search-btn">Search</button>
+    </div>
+
+    <div class="query-box">
+        <h2>Query with Image</h2>
+        <input type="file" id="image-input" accept="image/*">
+        <button id="image-search-btn">Search</button>
+    </div>
+</div>
+
+<hr>
+<h2>Results</h2>
+<div id="loader">Loading...</div>
+<div id="results"></div>
+
+<script>
+        const textInput = document.getElementById('text-input');
+        const textSearchBtn = document.getElementById('text-search-btn');
+        const imageInput = document.getElementById('image-input');
+        const imageSearchBtn = document.getElementById('image-search-btn');
+        const resultsDiv = document.getElementById('results');
+        const loader = document.getElementById('loader');
+
+        // --- Text Search Handler ---
+        textSearchBtn.addEventListener('click', async () => {
+            const queryText = textInput.value;
+            if (!queryText) {
+                alert('Please enter some text.');
+                return;
+            }
+            
+            loader.style.display = 'block';
+            resultsDiv.innerHTML = '';
+
+            const response = await fetch('/query/text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: queryText })
+            });
+            const data = await response.json();
+            displayResults(data.results);
+            loader.style.display = 'none';
+        });
+
+        // --- Image Search Handler ---
+        imageSearchBtn.addEventListener('click', async () => {
+            const file = imageInput.files[0];
+            if (!file) {
+                alert('Please select an image file.');
+                return;
+            }
+
+            loader.style.display = 'block';
+            resultsDiv.innerHTML = '';
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            const response = await fetch('/query/image', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            displayResults(data.results);
+            loader.style.display = 'none';
+        });
+
+        function displayResults(results) {
+            if (!results || results.length === 0) {
+                resultsDiv.innerHTML = '<p>No results found.</p>';
+                return;
+            }
+            results.forEach(item => {
+                const img = document.createElement('img');
+                img.src = item.image_path; // The backend provides the correct path
+                resultsDiv.appendChild(img);
+            });
+        }
+
+</script>
+</body>
+</html>
