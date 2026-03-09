@@ -1,0 +1,15 @@
+server:
+  host: "0.0.0.0"
+  port: 5000
+  admin_token: "SECRET_ADMIN_123"  # 管理员密钥，实际生产中应存环境变量
+
+paths:
+  upload_folder: "./uploads"
+  data_dir: "./data/"
+  result_dir: "./results/SHOH_CAPTURE_Enhanced/custom_data/"
+  database_file: "./data/metadata.db"
+  faiss_index_file: "./data/shoh.index"
+
+model:
+  hash_code_length: 256  # 根据你训练时的设定 (例如 32, 64, 128)
+  top_k: 20

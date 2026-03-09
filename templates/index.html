@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 化妆品智能搜索</title>
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; font-family: "Microsoft YaHei", sans-serif; }
+        .sidebar { height: 100vh; overflow-y: auto; position: sticky; top: 0; border-right: 1px solid #dee2e6; padding-top: 20px; }
+        .product-card { transition: transform 0.2s; border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.05); height: 100%; }
+        .product-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .card-img-top { height: 200px; object-fit: cover; border-bottom: 1px solid #eee; }
+        .card-body { padding: 12px; }
+        .product-title { font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 5px; }
+        .product-brand { font-size: 0.8rem; color: #6c757d; margin-bottom: 5px; }
+        .search-bar-container { background: white; padding: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        #loader { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; }
+        .brand-item { cursor: pointer; padding: 8px 12px; border-radius: 4px; font-size: 0.9rem; }
+        .brand-item:hover { background-color: #e9ecef; }
+        .brand-item.active { background-color: #0d6efd; color: white; }
+
+    </style>
+</head>
+<body>
+
+<div id="loader">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <span class="visually-hidden">加载中...</span>
+    </div>
+</div>
+
+<div class="modal fade" id="adminModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🔧 管理员商品上架</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label>Admin Token:</label>
+                    <input type="password" id="admin-token" class="form-control" value="SECRET_ADMIN_123">
+                </div>
+                <hr>
+                <input type="file" id="adm-img" class="form-control mb-2">
+                <input type="text" id="adm-title" class="form-control mb-2" placeholder="商品标题">
+                <input type="text" id="adm-brand" class="form-control mb-2" placeholder="品牌 (Brand)">
+                <input type="text" id="adm-label" class="form-control mb-2" placeholder="标签 (Label)">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="adminUpload()">上架并更新索引</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<button class="btn btn-sm btn-light position-fixed bottom-0 end-0 m-3" data-bs-toggle="modal"
+        data-bs-target="#adminModal">Admin
+</button>
+
+<div class="container-fluid search-bar-container sticky-top">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-3">
+                <h4 class="mb-0 text-primary fw-bold">💄 化妆品搜索</h4>
+            </div>
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" id="text-input" class="form-control"
+                           placeholder="输入关键词搜索（如：红色 口红）...">
+                    <button class="btn btn-primary" id="text-search-btn">文字搜索</button>
+                </div>
+            </div>
+            <div class="col-md-3 text-end">
+                <input type="file" id="image-input" accept="image/*" class="d-none">
+                <button class="btn btn-outline-secondary" onclick="document.getElementById('image-input').click()">
+                    📷 以图搜图
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-2 sidebar bg-white">
+            <h5 class="mb-3 px-2">品牌筛选</h5>
+            <div id="brand-list" class="d-flex flex-column gap-1">
+                <div class="text-muted small px-2">品牌列表加载中...</div>
+            </div>
+        </div>
+
+        <div class="col-md-10 py-4">
+            <div class="d-flex justify-content-between align-items-center mb-4 px-2">
+                <h5 id="result-header" class="mb-0">为您推荐</h5>
+                <span id="result-count" class="badge bg-secondary">共 0 件商品</span>
+            </div>
+
+            <div id="results" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5 g-4">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="stats-panel mb-4 p-3 bg-dark text-white rounded shadow-sm">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <span class="badge bg-success mb-1">AI 引擎在线</span>
+            <h5 class="mb-0">模型已学习商品数: <span id="learned-counter" class="text-warning">0</span></h5>
+        </div>
+        <div class="text-end">
+            <small class="text-muted d-block">状态：动态演进中</small>
+            <div class="spinner-grow spinner-grow-sm text-warning" role="status"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    const resultHeader = document.getElementById('result-header');
+    const resultCount = document.getElementById('result-count');
+    const resultsDiv = document.getElementById('results');
+    const brandListDiv = document.getElementById('brand-list');
+    const loader = document.getElementById('loader');
+
+    // --- 初始化数据 ---
+    document.addEventListener('DOMContentLoaded', async () => {
+        showLoader(true);
+        try {
+            const response = await fetch('/api/init_data');
+            const data = await response.json();
+            
+            if(data.brands) renderBrands(data.brands);
+            if(data.results) renderResults(data.results);
+        } catch (e) {
+            console.error(e);
+            alert("初始化数据加载失败，请检查后端服务。");
+        }
+        showLoader(false);
+    });
+    // 初始化或定期更新计数器
+    async function updateStats() {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        // 增加一个简单的数字增长动效
+        const counterEl = document.getElementById('learned-counter');
+        const startVal = parseInt(counterEl.innerText);
+        const endVal = data.learned_count;
+        
+        if (endVal > startVal) {
+            animateValue(counterEl, startVal, endVal, 1000);
+        }
+    }
+
+    function animateValue(obj, start, end, duration) {
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            obj.innerHTML = Math.floor(progress * (end - start) + start);
+            if (progress < 1) {
+                window.requestAnimationFrame(step);
+            }
+        };
+        window.requestAnimationFrame(step);
+    }
+
+    // 每 30 秒更新一次统计信息，体现“学习”过程
+    setInterval(updateStats, 30000);
+    updateStats();
+
+    // --- 品牌列表渲染 ---
+    function renderBrands(brands) {
+        brandListDiv.innerHTML = '<div class="brand-item active" onclick="resetFilter(this)">全部品牌</div>';
+        brands.forEach(brand => {
+            const div = document.createElement('div');
+            div.className = 'brand-item';
+            div.innerText = brand;
+            div.onclick = () => filterByBrand(brand, div);
+            brandListDiv.appendChild(div);
+        });
+    }
+
+    // --- 品牌筛选逻辑 ---
+    async function filterByBrand(brand, element) {
+        document.querySelectorAll('.brand-item').forEach(el => el.classList.remove('active'));
+        if(element) element.classList.add('active');
+        
+        resultHeader.innerText = `品牌：${brand}`;
+        showLoader(true);
+        
+        try {
+            const response = await fetch('/api/filter_by_brand', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ brand: brand })
+            });
+            const data = await response.json();
+            renderResults(data.results);
+        } catch(e) { console.error(e); }
+        showLoader(false);
+    }
+
+    async function resetFilter(element) {
+        document.querySelectorAll('.brand-item').forEach(el => el.classList.remove('active'));
+        if(element) element.classList.add('active');
+        resultHeader.innerText = "为您推荐";
+        // 重新请求初始展示数据
+        const response = await fetch('/api/init_data');
+        const data = await response.json();
+        renderResults(data.results);
+    }
+
+    // --- 搜索逻辑 ---
+    document.getElementById('text-search-btn').addEventListener('click', async () => {
+        const queryText = document.getElementById('text-input').value;
+        if (!queryText) return;
+
+        showLoader(true);
+        resultHeader.innerText = `搜索结果: "${queryText}"`;
+        
+        try {
+            const response = await fetch('/query/text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: queryText })
+            });
+            const data = await response.json();
+            renderResults(data.results);
+        } catch(e) { console.error(e); }
+        
+        showLoader(false);
+    });
+
+    document.getElementById('image-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        showLoader(true);
+        resultHeader.innerText = "识图搜索结果";
+        
+        const formData = new FormData();
+        formData.append('image', file);
+
+        try {
+            const response = await fetch('/query/image', { method: 'POST', body: formData });
+            const data = await response.json();
+            renderResults(data.results);
+        } catch(e) { console.error(e); }
+        
+        showLoader(false);
+    });
+
+    // --- 结果渲染函数 ---
+    function renderResults(items) {
+        resultsDiv.innerHTML = '';
+        resultCount.innerText = `共 ${items.length} 件商品`;
+
+        if (!items || items.length === 0) {
+            resultsDiv.innerHTML = '<div class="col-12 text-center py-5 text-muted">未找到相关商品</div>';
+            return;
+        }
+
+        items.forEach(item => {
+            const col = document.createElement('div');
+            col.className = 'col';
+            col.innerHTML = `
+                <div class="card product-card">
+                    <img src="${item.image_path}" class="card-img-top" alt="${item.title}" onerror="this.src='https://via.placeholder.com/200?text=图片加载失败'">
+                    <div class="card-body">
+                        <div class="product-brand badge bg-light text-dark border">${item.brand}</div>
+                        <h6 class="product-title" title="${item.title}">${item.title}</h6>
+                        <p class="card-text small text-muted mb-1">${item.label}</p>
+                        ${item.score !== undefined ? `<small class="text-xs text-secondary">相似度距: ${item.score.toFixed(3)}</small>` : ''}
+                    </div>
+                </div>
+            `;
+            resultsDiv.appendChild(col);
+        });
+    }
+
+    function showLoader(show) {
+        loader.style.display = show ? 'block' : 'none';
+    }
+
+    // 新增管理员上传逻辑
+    async function adminUpload() {
+        const token = document.getElementById('admin-token').value;
+        const file = document.getElementById('adm-img').files[0];
+        const title = document.getElementById('adm-title').value;
+        const brand = document.getElementById('adm-brand').value;
+        const label = document.getElementById('adm-label').value;
+
+        if(!file) return alert("请选择图片");
+
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('title', title);
+        formData.append('brand', brand);
+        formData.append('label', label);
+
+        showLoader(true);
+        try {
+            const res = await fetch('/api/admin/add_product', {
+                method: 'POST',
+                headers: { 'Authorization': token },
+                body: formData
+            });
+            const data = await res.json();
+            if(res.status === 403) {
+                alert("权限拒绝：Token 错误");
+            } else if (data.success) {
+                alert("上架成功！哈希索引已动态更新。");
+                location.reload();
+            } else {
+                alert("错误: " + data.error);
+            }
+        } catch(e) { console.error(e); alert("上传失败"); }
+        showLoader(false);
+    }
+
+</script>
+</body>
+</html>
